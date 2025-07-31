@@ -1,0 +1,82 @@
+extends CharacterBody2D
+
+class_name Player
+
+signal healthChanged
+
+@export var speed: int = 35
+@onready var animations = $AnimationPlayer
+@onready var currentHealth : int = maxHealth
+@export var maxHealth = 3
+@export var knockbackPower: int = 500
+@onready var effects = $Effects
+@onready var  hurtBox = $HurtBox
+@onready var hurtTimer = $HurtTimer
+@export var inventory: Inventory
+
+var isHurt: bool = false
+
+func _ready():
+	effects.play("RESET")
+
+func handleInput():
+	var moveDirection = Vector2()
+	moveDirection.x = Input.get_action_strength("ui_right") - Input.get_action_strength("ui_left")
+	moveDirection.y = Input.get_action_strength("ui_down") - Input.get_action_strength("ui_up")
+	velocity = moveDirection * speed
+
+func updateAnimation():
+	if velocity.length() == 0:
+		if animations.is_playing():
+			animations.stop()
+	else:
+		var direction = "Down"
+		if velocity.x < 0: direction = "Left"
+		elif velocity.x > 0: direction = "Right"
+		elif velocity.y < 0: direction = "Up"
+		animations.play("Walk" + direction )
+		#
+func handleCollisions():
+	for i in get_slide_collision_count():
+		var collision = get_slide_collision(i)
+		var collider = collision.get_collider()
+		
+
+
+func _physics_process(delta):
+	handleInput()
+	move_and_slide()
+	handleCollisions()
+	updateAnimation()
+	if !isHurt:
+		for area in hurtBox.get_overlapping_areas():
+			if area.name == "HitBox": 
+				hurtByEnemy(area)
+
+func hurtByEnemy(area):
+		currentHealth -= 1
+		if currentHealth < 0:
+			currentHealth = maxHealth
+			
+		healthChanged.emit(currentHealth)
+		isHurt = true
+		knockback(area.get_parent().velocity)
+		effects.play("HurtBlink")
+		hurtTimer.start()
+		await hurtTimer.timeout
+		effects.play("RESET")
+		isHurt = false
+	
+func _on_hurt_box_area_entered(area):
+	if area.has_method("Collect"):
+		area.Collect(inventory)
+
+		
+func knockback(enemyVelocity: Vector2):
+	var knockbackDirection = (enemyVelocity-velocity).normalized() * knockbackPower
+	velocity = knockbackDirection
+	move_and_slide()
+
+
+func _on_hurt_box_area_exited(area):
+	pass
